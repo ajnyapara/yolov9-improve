@@ -747,6 +747,9 @@ def parse_model(d, ch):  # model_dict, input_channels(3)
             c2 = sum(ch[x] for x in f)
         elif m is Shortcut:
             c2 = ch[f[0]]
+        elif m in (SimAM):
+             c2 = args[0] if isinstance(args[0], int) else ch[f]
+             m_ = m(c2, *args[1:])  # Initialize EnhancedSimAM with channels
         elif m is ReOrg:
             c2 = ch[f] * 4
         elif m is CBLinear:
