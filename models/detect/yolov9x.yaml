@@ -1,0 +1,123 @@
+# YOLOv9 with EnhancedSimAM
+
+# parameters
+nc: 80  # number of classes
+depth_multiple: 1.0  # model depth multiple
+width_multiple: 1.0  # layer channel multiple
+activation: nn.ReLU()
+
+# anchors
+anchors: 3
+
+# YOLOv9 backbone
+backbone:
+  [
+   [-1, 1, Silence, []],  
+
+   # Initial Conv Layers
+   [-1, 1, Conv, [64, 3, 2]],  # 1-P1/2
+   [-1, 1, Conv, [128, 3, 2]],  # 2-P2/4
+
+   # ELAN-1 Block
+   [-1, 1, RepNCSPELAN4, [256, 128, 64, 1]],  # 3
+
+   # Conv Down
+   [-1, 1, Conv, [256, 3, 2]],  # 4-P3/8
+
+   # ELAN-2 Block
+   [-1, 1, RepNCSPELAN4, [512, 256, 128, 1]],  # 5
+
+   # Conv Down
+   [-1, 1, Conv, [512, 3, 2]],  # 6-P4/16
+
+   # ELAN-2 Block
+   [-1, 1, RepNCSPELAN4, [512, 512, 256, 1]],  # 7
+
+   # Conv Down
+   [-1, 1, Conv, [512, 3, 2]],  # 8-P5/32
+
+   # ELAN-2 Block
+   [-1, 1, RepNCSPELAN4, [512, 512, 256, 1]],  # 9
+
+   # Insert EnhancedSimAM
+   [-1, 1, EnhancedSimAM, []],  # 10 - Attention Mechanism
+  ]
+
+# YOLOv9 head
+head:
+  [
+   # ELAN-SPP Block
+   [-1, 1, SPPELAN, [512, 256]],  # 11
+
+   # Up-sample and Concat
+   [-1, 1, nn.Upsample, [None, 2, 'nearest']],
+   [[-1, 7], 1, Concat, [1]],  # cat backbone P4
+
+   # ELAN-2 Block
+   [-1, 1, RepNCSPELAN4, [512, 512, 256, 1]],  # 14
+
+   # Insert EnhancedSimAM in head
+   [-1, 1, EnhancedSimAM, []],  # 15 - Attention Mechanism
+
+   # Up-sample and Concat
+   [-1, 1, nn.Upsample, [None, 2, 'nearest']],
+   [[-1, 5], 1, Concat, [1]],  # cat backbone P3
+
+   # ELAN-2 Block
+   [-1, 1, RepNCSPELAN4, [256, 256, 128, 1]],  # 18 (P3/8-small)
+
+   # Conv-Down Merge
+   [-1, 1, Conv, [256, 3, 2]],
+   [[-1, 14], 1, Concat, [1]],  # cat head P4
+
+   # ELAN-2 Block
+   [-1, 1, RepNCSPELAN4, [512, 512, 256, 1]],  # 21 (P4/16-medium)
+
+   # Conv-Down Merge
+   [-1, 1, Conv, [512, 3, 2]],
+   [[-1, 11], 1, Concat, [1]],  # cat head P5
+
+   # ELAN-2 Block
+   [-1, 1, RepNCSPELAN4, [512, 512, 256, 1]],  # 24 (P5/32-large)
+
+   # Routing
+   [5, 1, CBLinear, [[256]]],  # 25
+   [7, 1, CBLinear, [[256, 512]]],  # 26
+   [9, 1, CBLinear, [[256, 512, 512]]],  # 27
+
+   # Conv Down
+   [0, 1, Conv, [64, 3, 2]],  # 28-P1/2
+
+   # Conv Down
+   [-1, 1, Conv, [128, 3, 2]],  # 29-P2/4
+
+   # ELAN-1 Block
+   [-1, 1, RepNCSPELAN4, [256, 128, 64, 1]],  # 30
+
+   # Conv Down Fuse
+   [-1, 1, Conv, [256, 3, 2]],  # 31-P3/8
+   [[25, 26, 27, -1], 1, CBFuse, [[0, 0, 0]]],  # 32  
+
+   # ELAN-2 Block
+   [-1, 1, RepNCSPELAN4, [512, 256, 128, 1]],  # 33
+
+   # Conv Down Fuse
+   [-1, 1, Conv, [512, 3, 2]],  # 34-P4/16
+   [[26, 27, -1], 1, CBFuse, [[1, 1]]],  # 35  
+
+   # ELAN-2 Block
+   [-1, 1, RepNCSPELAN4, [512, 512, 256, 1]],  # 36
+
+   # Conv Down Fuse
+   [-1, 1, Conv, [512, 3, 2]],  # 37-P5/32
+   [[27, -1], 1, CBFuse, [[2]]],  # 38  
+
+   # ELAN-2 Block
+   [-1, 1, RepNCSPELAN4, [512, 512, 256, 1]],  # 39
+
+   # Insert EnhancedSimAM in Detection Head
+   [-1, 1, EnhancedSimAM, []],  # 40 - Attention in Detection
+
+   # Detection
+   [[33, 36, 39, 18, 21, 24], 1, DualDDetect, [nc]],  # 41 - Final Detection Layer
+  ]
